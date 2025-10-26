@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Station, Line, GameEvent } from '../types';
 
@@ -93,6 +92,81 @@ export const generateGameEvent = async (stations: Station[], lines: Line[]): Pro
 
   } catch (error) {
     console.error("Error generating game event with Gemini:", error);
+    return null;
+  }
+};
+
+
+export const generateStationName = async (
+  targetStation: Station,
+  allStations: Station[],
+  lines: Line[]
+): Promise<string | null> => {
+  if (!API_KEY) return null;
+
+  const existingNames = allStations.filter(s => s.id !== targetStation.id).map(s => s.name).join(', ') || 'None';
+  const linesThroughStation = lines.filter(line => line.stationIds.includes(targetStation.id));
+  const lineCount = linesThroughStation.length;
+
+  let isCentral = false;
+  if (allStations.length > 2) {
+    const sumX = allStations.reduce((acc, s) => acc + s.x, 0);
+    const sumY = allStations.reduce((acc, s) => acc + s.y, 0);
+    const centerX = sumX / allStations.length;
+    const centerY = sumY / allStations.length;
+
+    const distances = allStations.map(s => Math.sqrt(Math.pow(s.x - centerX, 2) + Math.pow(s.y - centerY, 2)));
+    const maxDistance = Math.max(...distances);
+    
+    const targetDistance = Math.sqrt(Math.pow(targetStation.x - centerX, 2) + Math.pow(targetStation.y - centerY, 2));
+
+    // If it's in the most central 30% of stations
+    if (maxDistance > 0 && targetDistance < maxDistance * 0.3) {
+      isCentral = true;
+    }
+  }
+
+  const prompt = `
+    You are a creative name generator for stations in a subway simulator game.
+    Your task is to generate a single, appropriate name for a specific station based on its characteristics.
+
+    Existing station names that you should try to avoid duplicating: ${existingNames}
+
+    The station to be named has these characteristics:
+    - Connectivity: It is served by ${lineCount} line(s).
+    - Location: It is located ${isCentral ? 'near the city center' : 'in an outer area'}.
+
+    Naming guidelines:
+    - If the station is a major hub (2 or more lines) AND is centrally located, suggest a name for a major landmark, square, or central transit hub. Examples: "Grand Central", "Union Square", "Market Street", "City Hall".
+    - If the station has only one line and is not central, suggest a plausible street name. Examples: "Oak Street", "Maple Avenue", "42nd Street".
+    - If it's a mix (e.g., central with one line, or a hub in an outer area), be creative. It could be a park, a specific district, or a smaller landmark. Examples: "Riverside Park", "University Heights", "East Market".
+    - AVOID generating a name for a major landmark (like "City Hall" or "Grand Central") if a similar name already exists in the list of existing station names. Be creative and find an alternative.
+
+    The name should be concise and sound like a real subway station.
+  `;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING, description: "The generated station name." },
+          },
+          required: ['name'],
+        },
+      },
+    });
+
+    const jsonString = response.text;
+    const data = JSON.parse(jsonString);
+    return data.name;
+
+  } catch (error) {
+    console.error("Error generating station name with Gemini:", error);
     return null;
   }
 };

@@ -1,17 +1,20 @@
-
 import React, { useState, useEffect } from 'react';
 import { Station, Line } from '../types';
+import { WandIcon, LoadingSpinnerIcon } from './icons';
+import { generateStationName } from '../services/geminiService';
 
 interface StationPanelProps {
   station: Station | null;
+  allStations: Station[];
   lines: Line[];
   onClose: () => void;
   onRename: (stationId: string, newName: string) => void;
   onDelete: (stationId: string) => void;
 }
 
-export const StationPanel: React.FC<StationPanelProps> = ({ station, lines, onClose, onRename, onDelete }) => {
+export const StationPanel: React.FC<StationPanelProps> = ({ station, allStations, lines, onClose, onRename, onDelete }) => {
   const [name, setName] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     if (station) {
@@ -32,6 +35,22 @@ export const StationPanel: React.FC<StationPanelProps> = ({ station, lines, onCl
     } else if (e.key === 'Escape') {
         if(station) setName(station.name);
         e.currentTarget.blur();
+    }
+  };
+
+  const handleGenerateName = async () => {
+    if (!station) return;
+    setIsGenerating(true);
+    try {
+      const generatedName = await generateStationName(station, allStations, lines);
+      if (generatedName) {
+        setName(generatedName);
+        onRename(station.id, generatedName);
+      }
+    } catch (error) {
+      console.error("Failed to generate station name:", error);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -58,15 +77,26 @@ export const StationPanel: React.FC<StationPanelProps> = ({ station, lines, onCl
             <label htmlFor="stationName" className="block text-sm font-medium text-gray-300 mb-1">
               Station Name
             </label>
-            <input
-              type="text"
-              id="stationName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={handleRename}
-              onKeyDown={handleKeyDown}
-              className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+            <div className="relative">
+                <input
+                type="text"
+                id="stationName"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={handleRename}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-gray-700 border border-gray-600 rounded-md p-2 pr-10 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <button
+                    onClick={handleGenerateName}
+                    disabled={isGenerating}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-indigo-400 disabled:cursor-not-allowed disabled:text-gray-500 transition-colors"
+                    title="Generate name with AI"
+                    aria-label="Generate station name with AI"
+                >
+                    {isGenerating ? <LoadingSpinnerIcon className="h-5 w-5" /> : <WandIcon />}
+                </button>
+            </div>
         </div>
         
         <div>

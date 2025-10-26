@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Map } from './components/Map';
 import { Toolbar } from './components/Toolbar';
@@ -473,6 +472,7 @@ const App: React.FC = () => {
             />
             <StationPanel
                 station={selectedStation}
+                allStations={stations}
                 lines={lines}
                 onClose={() => setSelectedStationId(null)}
                 onRename={handleRenameStation}
