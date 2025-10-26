@@ -10,6 +10,7 @@ interface InfoPanelProps {
   passengersServed: number;
   avgWaitTime: number;
   activeEvent: (GameEvent & { remaining: number }) | null;
+  networkGrade: { grade: string, color: string };
 }
 
 export const InfoPanel: React.FC<InfoPanelProps> = ({
@@ -17,7 +18,8 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
   totalPassengers,
   passengersServed,
   avgWaitTime,
-  activeEvent
+  activeEvent,
+  networkGrade,
 }) => {
   const formatTime = (time: number) => {
     const totalSeconds = Math.floor(time / 1000);
@@ -33,7 +35,7 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
   }
 
   return (
-    <div className="absolute top-4 right-4 z-10 p-4 bg-gray-800 bg-opacity-80 backdrop-blur-sm rounded-xl shadow-lg w-72 flex flex-col gap-4 text-sm">
+    <div className="p-4 bg-gray-800 bg-opacity-80 backdrop-blur-sm rounded-xl shadow-lg flex flex-col gap-4 text-sm">
         <div>
             <h3 className="font-bold text-lg text-gray-200">System Status</h3>
             <p className="text-indigo-400 font-mono">{formatTime(gameTime)}</p>
@@ -50,6 +52,10 @@ export const InfoPanel: React.FC<InfoPanelProps> = ({
             <div>
                 <p className="text-gray-400">Avg. Wait Time</p>
                 <p className="text-xl font-semibold">{formatWaitTime(avgWaitTime)}</p>
+            </div>
+             <div>
+                <p className="text-gray-400">Network Grade</p>
+                <p className={`text-2xl font-bold ${networkGrade.color}`}>{networkGrade.grade}</p>
             </div>
         </div>
         

@@ -1,11 +1,11 @@
-
 import React, { useCallback, useEffect, useRef } from 'react';
 
 type GameLoopCallback = (deltaTime: number) => void;
 
 export const useGameLoop = (callback: GameLoopCallback, isRunning: boolean) => {
-  const requestRef = useRef<number>();
-  const previousTimeRef = useRef<number>();
+  // FIX: Corrected useRef typing to allow for undefined, which is the initial state and also used when the loop is stopped.
+  const requestRef = useRef<number | undefined>();
+  const previousTimeRef = useRef<number | undefined>();
 
   const animate = useCallback((time: number) => {
     if (previousTimeRef.current !== undefined) {

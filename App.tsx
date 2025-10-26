@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Map } from './components/Map';
 import { Toolbar } from './components/Toolbar';
@@ -5,6 +6,7 @@ import { InfoPanel } from './components/InfoPanel';
 import { NewLineModal } from './components/NewLineModal';
 import { StationPanel } from './components/StationPanel';
 import { TrainPanel } from './components/TrainPanel';
+import { LineStatsPanel } from './components/LineStatsPanel';
 import { Station, Line, Train, Passenger, Tool, GameEvent } from './types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { TILE_SIZE, TRAIN_SPEED, PASSENGER_SPAWN_RATE, BASE_STATION_CAPACITY, TRAIN_CAPACITY, EVENT_CHECK_INTERVAL } from './constants';
@@ -25,6 +27,8 @@ const App: React.FC = () => {
     const [isNewLineModalOpen, setIsNewLineModalOpen] = useState(false);
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
     const [selectedTrainId, setSelectedTrainId] = useState<string | null>(null);
+    const [lineStats, setLineStats] = useState<Record<string, { passengersServed: number }>>({});
+    const [networkGrade, setNetworkGrade] = useState<{ grade: string, color: string }>({ grade: 'N/A', color: 'text-gray-400' });
 
 
     // FIX: Use `window.Map` to avoid naming collision with the imported `Map` component.
@@ -44,6 +48,7 @@ const App: React.FC = () => {
         setActiveEvent(null);
         setSelectedStationId(null);
         setSelectedTrainId(null);
+        setLineStats({});
         // Show new line modal on reset
         setIsNewLineModalOpen(true);
     }, []);
@@ -93,6 +98,11 @@ const App: React.FC = () => {
         if (activeLineId === lineId) {
             setActiveLineId(lines.length > 1 ? lines.find(l => l.id !== lineId)!.id : null);
         }
+        setLineStats(prev => {
+            const newStats = {...prev};
+            delete newStats[lineId];
+            return newStats;
+        });
     };
 
     const handleDeleteStation = (stationId: string) => {
@@ -116,7 +126,7 @@ const App: React.FC = () => {
         setLines(updatedLines);
 
         if (linesToDelete.size > 0) {
-            setTrains(prev => prev.filter(train => !linesToDelete.has(train.lineId)));
+            linesToDelete.forEach(lineId => handleDeleteLine(lineId));
         }
 
         setStations(prev => prev.filter(s => s.id !== stationId));
@@ -305,6 +315,15 @@ const App: React.FC = () => {
                     }
                     setPassengersServed(s => s + 1);
                     setTotalWaitTime(t => t + (gameTime - p.spawnTime));
+                    setLineStats(prevStats => {
+                        const newStats = { ...prevStats };
+                        const lineId = train.lineId;
+                        if (!newStats[lineId]) {
+                            newStats[lineId] = { passengersServed: 0 };
+                        }
+                        newStats[lineId].passengersServed += 1;
+                        return newStats;
+                    });
                     return false;
                 });
 
@@ -411,6 +430,42 @@ const App: React.FC = () => {
     const totalPassengers = stations.reduce((sum, s) => sum + s.passengers.length, 0) + trains.reduce((sum, t) => sum + t.passengers.length, 0);
     const avgWaitTime = passengersServed > 0 ? totalWaitTime / passengersServed : 0;
 
+    useEffect(() => {
+        const calculateNetworkGrade = () => {
+            if (stations.length < 2 || lines.length === 0 || trains.length === 0) {
+                return { grade: 'N/A', color: 'text-gray-400' };
+            }
+
+            // 1. Wait Time Score (40 points)
+            // Target: < 10s is perfect. > 30s is 0 points.
+            const waitTimeScore = Math.max(0, 40 * (1 - Math.max(0, avgWaitTime - 10000) / 20000));
+
+            // 2. Efficiency Score (30 points)
+            // Based on ratio of served vs waiting passengers
+            const efficiencyScore = 30 * (passengersServed / (passengersServed + totalPassengers + 1));
+
+            // 3. Coverage Score (20 points)
+            const linesScore = Math.min(10, lines.length * 2);
+            const avgTrainsPerLine = lines.length > 0 ? trains.length / lines.length : 0;
+            const trainsPerLineScore = Math.min(10, avgTrainsPerLine * 3.33);
+            const coverageScore = linesScore + trainsPerLineScore;
+            
+            // 4. System Size Score (10 points)
+            const systemSizeScore = Math.min(10, trains.length);
+
+            const totalScore = Math.round(waitTimeScore + efficiencyScore + coverageScore + systemSizeScore);
+
+            if (totalScore >= 90) return { grade: 'A', color: 'text-green-400' };
+            if (totalScore >= 80) return { grade: 'B', color: 'text-teal-400' };
+            if (totalScore >= 70) return { grade: 'C', color: 'text-yellow-400' };
+            if (totalScore >= 60) return { grade: 'D', color: 'text-orange-400' };
+            return { grade: 'F', color: 'text-red-500' };
+        };
+
+        setNetworkGrade(calculateNetworkGrade());
+
+    }, [avgWaitTime, passengersServed, totalPassengers, lines, trains, stations]);
+
     const activeLine = lines.find(l => l.id === activeLineId);
     const canAddTrain = !!activeLine && activeLine.stationIds.length >= 2;
     const selectedStation = stations.find(s => s.id === selectedStationId) || null;
@@ -446,13 +501,21 @@ const App: React.FC = () => {
                 canAddTrain={canAddTrain}
                 onDeleteLine={handleDeleteLine}
             />
-            <InfoPanel 
-                gameTime={gameTime}
-                totalPassengers={totalPassengers}
-                passengersServed={passengersServed}
-                avgWaitTime={avgWaitTime}
-                activeEvent={activeEvent}
-            />
+            <div className="absolute top-4 right-4 z-10 flex flex-col gap-4 w-72">
+                <InfoPanel 
+                    gameTime={gameTime}
+                    totalPassengers={totalPassengers}
+                    passengersServed={passengersServed}
+                    avgWaitTime={avgWaitTime}
+                    activeEvent={activeEvent}
+                    networkGrade={networkGrade}
+                />
+                <LineStatsPanel
+                    lines={lines}
+                    trains={trains}
+                    lineStats={lineStats}
+                />
+            </div>
             <Map 
                 stations={stations} 
                 lines={lines} 
